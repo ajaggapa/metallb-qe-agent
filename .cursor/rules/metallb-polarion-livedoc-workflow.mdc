@@ -1,0 +1,28 @@
+---
+description: Polarion LiveDoc must embed testcase content on the module home page, not only work-item macros
+alwaysApply: true
+---
+
+# Polarion testcase + LiveDoc (mandatory)
+
+When creating or updating **Polarion testcase work items** attached to a **LiveDoc module** (MetalLB/CNF or similar):
+
+1. **Always PATCH the module `homePageContent`** after work items exist and are moved into the document. A list of testcase macros alone is **not** sufficient—the wiki page must show **titles, Description, Setup, Test steps (Step | Expected Result table), and Teardown** in HTML on the home page.
+
+2. **Implementation (use these, do not reinvent ad hoc):**
+   - `adapters/polarion_livedoc.build_livedoc_home_html` — builds the standard HTML (tables + per-TC portal links).
+   - `PolarionAdapter.publish_livedoc_home_page(...)` — builds and PATCHes in one call.
+   - Reference script: `scripts/publish_cnf20333_polarion_tests.py` (pattern for new epics: same flow, new titles/traceability/test data).
+
+3. **Polarion API constraints** (encoded in `polarion_livedoc`):
+   - Start the body with `<p id="polarion_1"></p>`.
+   - Do **not** set custom `id=` attributes on headings (PATCH may fail with “Wrong Heading Part ID format”).
+   - Use **bold `<p>` labels** for subsections (Description, Setup, Test steps, Teardown), not `<h3>` (Polarion may rewrite `h3` into empty work-item macros).
+
+4. **Bottom of page:** do **not** add a separate "Linked Polarion test cases" section or trailing `module-workitem` macros—each testcase already links to its Polarion WI from the section header. **This is enforced in code:** `build_livedoc_home_html` runs `validate_livedoc_home_html_policy` and raises `ValueError` if those patterns appear (including inside testcase HTML fields).
+
+5. **Test step cells (LiveDoc table + testcase WI steps):** use `white-space:pre-wrap` with `overflow-wrap:break-word` / `word-break:break-word` inside a `<div>`, not a plain `<pre>`—tables use `width:100%;table-layout:fixed` and 50% columns so text wraps. To refresh existing Polarion items: `scripts/publish_cnf20333_polarion_tests.py --home-page-only --attach-work-items … --resync-steps-and-home`.
+
+6. **Refresh body only:** `python3 scripts/publish_cnf20333_polarion_tests.py --home-page-only --attach-work-items OCP-…` (ids in TC order). For other epics, copy the script pattern or call `publish_livedoc_home_page` with the same test dict shape.
+
+7. **CNF MetalLB area:** default LiveDoc space for CNF epics is **`CNF`** (same wiki tree as `CNF MetalLB`), unless the user specifies another `POLARION_SPACE_ID`.

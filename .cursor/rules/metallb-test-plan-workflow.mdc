@@ -1,0 +1,50 @@
+---
+description: Generate MetalLB high-level and detailed test plans from Jira Epic + code analysis
+alwaysApply: true
+---
+
+# MetalLB Test Plan Rule
+
+**QE phases and approval gates:** See `.cursor/rules/metallb-qe-lifecycle.mdc`. Do not start the **detailed** plan (below) until the user confirms the **high-level** plan is **reviewed and approved**. Do not publish to **Polarion** until the user **approves** the **detailed** Google Doc.
+
+## High-level test plan
+
+When the user asks for a **high-level** test plan for MetalLB/OpenShift networking features:
+
+1. Apply the `metallb-high-level-test-plan` skill.
+2. Gather feature context from Jira Epic and linked design docs/PRs (prefer Atlassian MCP tools).
+3. Clone/update and analyze all three repos in `.cursor/workspaces/metallb-repo-analysis/`:
+   - `metallb/metallb-operator`
+   - `metallb/metallb`
+   - `metallb/frr-k8s`
+4. Inspect `api/` and controller/reconciler logic to determine impact and scope.
+5. Produce output strictly in `.cursor/skills/metallb-high-level-test-plan/template.md`:
+   - `High-Level Test Plan`
+   - `JIRA Reference`
+   - `Feature Summary`
+   - `Scope`
+   - `Test Cases`
+   - `References`
+6. Include at least 3 test cases with Purpose, Procedure, Expected Result, and Pass/Fail criteria.
+7. Do not persist test-plan markdown files in the project workspace.
+8. Publish only via `scripts/validate_and_publish_test_plan.sh` using stdin markdown content.
+9. Never use `adapters/google_docs_adapter.py` for final test-plan output.
+10. Include only the Google Docs URL in the output unless the user asks for local files.
+
+## Detailed test plan (YAML + oc/kubectl)
+
+When the user asks for a **detailed** test plan, **step-by-step** manual instructions, **executable** test cases, or YAML/`oc`/`kubectl` commands aligned to a high-level plan:
+
+1. Apply the `metallb-detailed-test-plan` skill (`.cursor/skills/metallb-detailed-test-plan/SKILL.md`).
+2. Use the same Jira/doc/repo analysis expectations as the high-level flow (Epic, linked docs, all three repos under `.cursor/workspaces/metallb-repo-analysis/`).
+3. Map each high-level `TC-NN` into `### TC-NN` sections with `#### Step` subsections; every case must include fenced **yaml** manifests and **bash** (or sh/shell) blocks using `oc` or `kubectl`.
+4. Produce output strictly following `.cursor/skills/metallb-detailed-test-plan/template.md` (including **Prerequisites** and the `## Placeholders` section: **grouped bullet lists** of fixed literals—no markdown tables, which paste poorly into Google Docs).
+5. For detailed plans: hardcode namespace `metallb-system` in YAML and commands unless the Epic requires otherwise; avoid pseudo-headings inside YAML fences and extra bold (follow `metallb-detailed-test-plan` SKILL.md formatting rules).
+6. Do not persist detailed-plan markdown in the project workspace; use stdin or `/tmp` then publish.
+7. Publish only via `scripts/validate_and_publish_detailed_test_plan.sh "Detailed Test Plan - <JIRA_KEY> - <Feature Name>"` with markdown on stdin.
+8. Never use `adapters/google_docs_adapter.py` for final output.
+9. Return only the Google Docs URL unless the user explicitly asks for local files or pasted markdown.
+
+## Polarion (test cases + LiveDoc)
+
+When the user wants tests in **Polarion** instead of or in addition to Google Docs, follow `.cursor/rules/metallb-polarion-livedoc-workflow.mdc` and skill `metallb-polarion-test-publish` — including **embedding** testcase content on the LiveDoc home page via `PolarionAdapter.publish_livedoc_home_page`.

@@ -1,0 +1,25 @@
+# Secrets and local config
+.env
+.env.*
+
+# Local analysis clones, venvs, and runtime (see AGENTS.md)
+.cursor/workspaces/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.idea/

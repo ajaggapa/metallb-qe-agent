@@ -1,0 +1,51 @@
+---
+description: Four-phase MetalLB QE cycle with mandatory user validation gates between phases
+alwaysApply: true
+---
+
+# MetalLB QE lifecycle (phases and gates)
+
+This workspace follows a **four-phase** QE cycle for each Jira Epic that represents a feature. The agent must treat phases as **sequential** and must **not** start the next phase until the user **explicitly validates and approves** completion of the current phase (for example: “Phase 1 approved, proceed to detailed plan” or “approved, continue to Polarion”).
+
+## Phase map
+
+| Phase | Name | Primary deliverable | Gate |
+| ----- | ---- | ------------------- | ---- |
+| 1 | High-level test plan | Google Doc (peer + developer review cycle) | User confirms review/approval satisfied |
+| 2 | Detailed test plan | Google Doc + cluster validation notes | User approves detailed Doc; then Polarion (see below) |
+| 3 | Test case first execution | Tabular run results vs Polarion testcase IDs on a **second** cluster | User approves proceeding to automation |
+| 4 | Test automation | Tests on a **user-owned clone** branch; CI green on **user’s GitHub**; **no PR** | User closes the cycle or requests changes |
+
+## Phase 1 — High-level test plan
+
+- **Inputs:** Jira Epic link/key; optional design doc links.
+- **Agent:** Apply skill `metallb-high-level-test-plan`; Jira/docs via Atlassian MCP when available; analyze `metallb-operator`, `metallb`, `frr-k8s` under `.cursor/workspaces/metallb-repo-analysis/`; publish via `scripts/validate_and_publish_test_plan.sh` (stdin markdown; no workspace-persisted plan files; no ad-hoc `google_docs_adapter` for final output).
+- **Human workflow:** User edits the Doc, drives peer QE + Epic assignee (developer) review, incorporates feedback, obtains approval.
+- **Gate:** Do **not** generate or publish a **detailed** plan, run detailed cluster execution, or touch Polarion for this Epic’s procedure until the user states that the **high-level plan is approved** (with or without edits to the original agent draft).
+
+## Phase 2 — Detailed test plan
+
+- **Inputs:** **Approved** high-level plan (Google Doc URL or export the user confirms is final for this step); Jira Epic context as needed; optional **`KUBECONFIG`** (path env or file the user provides) for a **dedicated test OpenShift cluster**.
+- **Agent:** Apply skill `metallb-detailed-test-plan`; publish via `scripts/validate_and_publish_detailed_test_plan.sh`.
+- **With `KUBECONFIG`:** Use `oc`/`kubectl` against that cluster to **exercise every proposed test case**, capture **observed** outputs for steps, and align **Expected** text with cluster truth. Record pass/fail per step and per TC; flag anomalies early.
+- **Bug vs procedure:** If behavior mismatches expectations, triage using product code under the analysis repos (and linked Jira). If **confirmed product defect:** gather logs/evidence and create a **Jira bug** with `project = OCPBUGS` and **component = `Networking / Metal LB`**. If **test/procedure error:** fix the detailed plan content and re-validate on cluster before republishing/updating the Doc as needed.
+- **Polarion (after Doc approval only):** When the user **explicitly approves** the detailed test plan in Google Docs, publish to **Polarion** as a **new LiveDoc document** under the **OpenShift `CNF`** area (default space **`CNF`**, same wiki tree as **CNF MetalLB** unless the user specifies `POLARION_SPACE_ID`). Follow `.cursor/rules/metallb-polarion-livedoc-workflow.mdc` and skill `metallb-polarion-test-publish`: testcase work items + **full** home page HTML (Description, Setup, Step | Expected Result, Teardown)—not macro-only pages.
+- **Gate:** Do **not** run Phase 3 “first execution” matrix or Phase 4 automation **for this feature** until the user confirms **detailed plan approved** and (if Polarion is in scope) that **Polarion publish is done or explicitly deferred**.
+
+## Phase 3 — Test case first execution (manual / Polarion IDs)
+
+- **Inputs:** List of **Polarion testcase work item IDs** (or stable identifiers the user provides); **`KUBECONFIG`** for a **different** test cluster than Phase 2 when possible (fresh validation).
+- **Agent:** Apply skill `metallb-manual-test-execution`. Execute each test **using the finalized procedure** (Polarion + detailed Doc as source of truth). Report results in a **table** (columns such as: Test ID, Title/summary, Status, Notes, Evidence/commands).
+- **Gate:** Do **not** start Phase 4 until the user confirms first execution is complete and approves moving to automation.
+
+## Phase 4 — Test automation (upstream-style e2e, user fork)
+
+- **Inputs:** User’s **GitHub** identity/fork URL; branch name convention the user wants; which repo (`metallb/metallb` is the primary example for `e2etest/` + `tasks.py` **invoke** targets).
+- **Agent:** Apply skill `metallb-e2e-automation`. Clone **the user’s** fork (authenticated as the user), create a **test branch**, add or extend tests under `e2etest/`, push to **the user’s** remote.
+- **Validation:** Rely on **GitHub Actions** workflows already defined on **the user’s** repository (push to the branch triggers CI, or use `gh workflow run` / Actions UI as appropriate). **Do not open a pull request** unless the user explicitly asks; default is **branch-only** on the user’s clone/fork.
+- **Local reference:** Upstream uses **KIND**-based dev env via `inv dev-env` and suites via `inv e2etest` (see `metallb/metallb` `tasks.py`, `e2etest/README.md`). Example pattern: `inv e2etest --skip "IPV6|DUALSTACK|FRR-MODE|L2" --bgp-mode frr-k8s --ginkgo-params "-v --focus 'ConfigurationState'"` — adjust flags to match the tests being added.
+
+## Conflicts and precedence
+
+- If a user request skips a phase, they must **say so explicitly** (“skip Polarion”, “run automation only”). Otherwise enforce gates.
+- Existing rules for **no local test-plan markdown**, **publish scripts only**, and **Polarion home page policy** remain in force; this file adds **phase ordering** and **human approval** between phases.

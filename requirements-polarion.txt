@@ -1,0 +1,2 @@
+# Optional: Polarion REST publishing (see scripts/publish_cnf20333_polarion_tests.py)
+polarion-rest-client>=0.4.0
