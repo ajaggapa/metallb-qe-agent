@@ -3,8 +3,10 @@
 .env.*
 !.env.example
 
-# Local analysis clones, venvs, and runtime (see AGENTS.md)
+# Local analysis clones, venvs, agent temp output, and runtime (see AGENTS.md)
 .cursor/workspaces/
+# Explicit: transient markdown and other agent artifacts (parent dir already ignored)
+.cursor/workspaces/agent-tmp/
 
 # Python
 __pycache__/

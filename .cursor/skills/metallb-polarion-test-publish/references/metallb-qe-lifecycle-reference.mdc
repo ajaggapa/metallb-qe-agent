@@ -1,0 +1,5 @@
+# QE lifecycle reference
+
+For phase gates, use `.cursor/skills/metallb-detailed-test-plan/references/metallb-qe-lifecycle.mdc`.
+
+Polarion publish in the default workflow is part of **Phase 2**, and only after user approval of the detailed Google Doc.

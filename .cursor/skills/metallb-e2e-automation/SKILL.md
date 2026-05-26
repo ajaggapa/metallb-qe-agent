@@ -55,4 +55,4 @@ Cleanup when done with local KIND: `inv dev-env-cleanup`.
 ## Constraints
 
 - No credentials in commits; use CI secrets patterns upstream already defines.
-- Respect `.cursor/rules/metallb-qe-lifecycle.mdc` phase ordering.
+- Respect `references/metallb-qe-lifecycle-reference.mdc` phase ordering.

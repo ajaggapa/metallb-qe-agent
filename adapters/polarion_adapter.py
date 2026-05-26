@@ -4,7 +4,7 @@
 Also provides helpers to create test-case work items with Setup / Teardown / Test Steps
 (two-column Polarion steps: step + expectedResult), attach them to a LiveDoc module, and
 **PATCH the module home page** with readable HTML (see `polarion_livedoc.build_livedoc_home_html`
-and `.cursor/rules/metallb-polarion-livedoc-workflow.mdc`).
+and `.cursor/skills/metallb-polarion-test-publish/references/metallb-polarion-livedoc-workflow.mdc`).
 """
 
 from __future__ import annotations
@@ -27,6 +27,28 @@ def read_env_values(env_file: Path) -> dict[str, str]:
             continue
         key, value = line.split("=", 1)
         values[key.strip()] = value.strip().strip("'\"")
+    return values
+
+
+# Process environment overrides for one-off runs (export VAR=... wins over .env for these keys).
+_QE_SHELL_OVERRIDE_PREFIXES = ("POLARION_", "METALLB_", "JIRA_")
+_QE_SHELL_OVERRIDE_EXACT: frozenset[str] = frozenset({"KUBECONFIG"})
+
+
+def read_qe_env(env_file: Path) -> dict[str, str]:
+    """
+    Load ``.env`` then overlay matching variables from ``os.environ``.
+
+    Use this for publish scripts so operators can pass ``METALLB_JIRA_EPIC_KEY``,
+    ``POLARION_TRACE_*``, or ``KUBECONFIG`` from the shell without editing ``.env``.
+    """
+    values = read_env_values(env_file)
+    for key, raw in os.environ.items():
+        v = raw.strip() if isinstance(raw, str) else ""
+        if not v:
+            continue
+        if key in _QE_SHELL_OVERRIDE_EXACT or key.startswith(_QE_SHELL_OVERRIDE_PREFIXES):
+            values[key] = v
     return values
 
 
@@ -326,7 +348,7 @@ class PolarionAdapter:
 
 def main() -> None:
     env_file = Path(__file__).resolve().parent.parent / ".env"
-    env_values = read_env_values(env_file)
+    env_values = read_qe_env(env_file)
 
     parser = argparse.ArgumentParser(
         description="Validate Polarion token auth and optionally fetch a work item."

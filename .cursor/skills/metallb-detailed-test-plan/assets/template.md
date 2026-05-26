@@ -13,6 +13,7 @@
 
 - OpenShift/Kubernetes version:
 - MetalLB / metallb-operator / frr-k8s versions (if known):
+- **QE source context (for writing and for debugging cluster runs):** current clones of upstream `metallb-operator`, `metallb`, and `frr-k8s` (see `.cursor/workspaces/metallb-repo-analysis/` and the detailed test-plan skill for GitHub URLs). When validating on a test cluster, align observed behavior with reconcilers/CRDs in those repos.
 - Default CLI: `oc` (use `kubectl` where equivalent)
 - MetalLB namespace for this plan: `metallb-system` (change here only if the Epic targets a different layout)
 - Assumptions (network, workers, privileged FRR, etc.):
@@ -27,8 +28,8 @@ Intro sentence: all names below are **fixed literals** for this plan (no `METALL
 
 **Baseline pool (TC-01)**
 
-- IPAddressPool: `cnf20333-baseline-pool`
-- L2Advertisement: `cnf20333-baseline-l2`
+- IPAddressPool: `example-baseline-pool`
+- L2Advertisement: `example-baseline-l2`
 - CIDR: `192.0.2.0/24` (documentation range; pick another non-overlapping CIDR only if this conflicts with your lab)
 
 **Other test objects**
@@ -61,7 +62,7 @@ Manifest (YAML):
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: cnf20333-example
+  name: example-configmap
   namespace: metallb-system
 data:
   key: value
@@ -71,7 +72,7 @@ Run:
 
 ```bash
 oc apply -f step2-manifest.yaml
-oc describe configmap cnf20333-example -n metallb-system
+oc describe configmap example-configmap -n metallb-system
 ```
 
 Expected: [What the tester should see]
@@ -79,7 +80,7 @@ Expected: [What the tester should see]
 Cleanup (optional):
 
 ```bash
-oc delete configmap cnf20333-example -n metallb-system --ignore-not-found
+oc delete configmap example-configmap -n metallb-system --ignore-not-found
 ```
 
 ### TC-02: [Name]

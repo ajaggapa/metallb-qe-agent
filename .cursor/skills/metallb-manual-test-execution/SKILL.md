@@ -17,11 +17,13 @@ The user is in **Phase 3** of the MetalLB QE lifecycle: **test case first execut
 - **`KUBECONFIG`:** path or environment the user provides; never commit or paste secrets into repos or Docs.
 - **Procedure source:** Polarion testcase steps and/or approved detailed Google Doc URL.
 
+**Resolution:** IDs and Doc URL from the user message. For kubeconfig, use **exactly** the path or env value the user supplied (`export KUBECONFIG="$USER_PATH"`). Optionally run `scripts/check_cluster_context.sh` with that path to fail fast if the cluster is unreachable.
+
 ## Workflow
 
 1. **Confirm gate** — Ask only if unclear: user should confirm Phase 2 approval and that this is the intended **first execution** cluster (prefer a **different** cluster from Phase 2 when the lifecycle calls for it).
 
-2. **Configure CLI** — `export KUBECONFIG=...` (or use `--kubeconfig`), verify with `oc whoami` / `oc cluster-info` or equivalent.
+2. **Configure CLI** — `export KUBECONFIG=...` (or use `--kubeconfig`), verify with `oc whoami` / `oc cluster-info` or `scripts/check_cluster_context.sh`.
 
 3. **Per testcase**
    - Load **Setup**, **Steps**, **Expected results**, **Teardown** from Polarion (API/adapters if available) or from the user-pasted detailed plan.
@@ -40,4 +42,4 @@ The user is in **Phase 3** of the MetalLB QE lifecycle: **test case first execut
 ## Constraints
 
 - Do not store kubeconfig or tokens in the workspace or in Google Docs.
-- Align with `.cursor/rules/metallb-qe-lifecycle.mdc` for phase gates.
+- Align with `references/metallb-qe-lifecycle-reference.mdc` for phase gates.

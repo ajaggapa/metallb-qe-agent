@@ -1,0 +1,2 @@
+# Optional: improves TLS trust store for Jira API on macOS Python builds
+certifi>=2024.0.0

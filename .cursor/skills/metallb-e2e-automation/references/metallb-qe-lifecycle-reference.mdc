@@ -1,0 +1,5 @@
+# QE lifecycle reference
+
+Use `.cursor/skills/metallb-detailed-test-plan/references/metallb-qe-lifecycle.mdc` for authoritative phase gates.
+
+This skill is Phase 4 and starts only after user approval following Phase 3 completion.

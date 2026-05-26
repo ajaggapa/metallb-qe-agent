@@ -4,7 +4,8 @@ Reusable Polarion LiveDoc home-page HTML for testcase collections.
 Polarion only shows testcase *titles* in the outline if the home page is only work-item macros.
 Always PATCH `homePageContent` with readable content; link each WI from its section (no trailing macro list).
 
-See `.cursor/rules/metallb-polarion-livedoc-workflow.mdc` and skill `metallb-polarion-test-publish`.
+See `.cursor/skills/metallb-polarion-test-publish/references/metallb-polarion-livedoc-workflow.mdc`
+and skill `metallb-polarion-test-publish`.
 """
 
 from __future__ import annotations

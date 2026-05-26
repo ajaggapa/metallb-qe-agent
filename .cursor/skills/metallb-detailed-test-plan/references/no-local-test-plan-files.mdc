@@ -1,0 +1,15 @@
+---
+description: Prevent persistent local test-plan markdown artifacts
+---
+
+# No Local Test Plan Files
+
+When generating high-level or detailed test plans:
+
+1. Do not save output markdown under **tracked** repo paths (repo root, `scripts/`, skills, etc.).
+2. For validation or publish pipelines, use transient markdown only: **stdin**, or files under **`.cursor/workspaces/agent-tmp/`** (gitignored). Do not use `/tmp` or other locations outside the repo’s gitignore rules.
+3. Mandatory publish commands:
+   - High-level: `scripts/validate_and_publish_test_plan.sh "<title>"`
+   - Detailed (YAML + oc/kubectl): `scripts/validate_and_publish_detailed_test_plan.sh "<title>"`
+4. Return only the Google Docs URL unless the user explicitly asks for local files.
+5. Phase ordering and **user approval between phases** (including before Polarion publish) are defined in `metallb-qe-lifecycle.mdc`.

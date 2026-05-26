@@ -1,5 +1,10 @@
 # High-Level Test Plan: [Feature Name] ([JIRA_KEY])
 
+## JIRA Reference
+
+- Ticket Key: `[JIRA_KEY]`
+- Ticket URL: [full Jira browse URL]
+
 ## Team
 
 - Developer: [Assignee of JIRA Epic]
@@ -61,3 +66,5 @@
 3.
 
 Add concrete values before validation (for example Jira URL, design doc URL, PR URL).
+
+Agent note: return this structure in chat on create/generate; publish to Google Docs only when the user explicitly asks.

@@ -28,7 +28,7 @@ PY
 )"
   if [[ "$ABS_MARKDOWN_FILE" == "$ROOT_DIR/"* ]] && [[ "${ALLOW_PROJECT_MARKDOWN_FILE:-0}" != "1" ]]; then
     echo "ERROR: --markdown-file points inside project workspace: $ABS_MARKDOWN_FILE" >&2
-    echo "Use stdin or /tmp markdown path. Set ALLOW_PROJECT_MARKDOWN_FILE=1 only if explicitly requested by user." >&2
+    echo "Use stdin or a path under .cursor/workspaces/agent-tmp/ (gitignored). Set ALLOW_PROJECT_MARKDOWN_FILE=1 only if explicitly requested by user." >&2
     exit 2
   fi
 fi
