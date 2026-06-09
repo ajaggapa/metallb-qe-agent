@@ -19,7 +19,10 @@ Usage:
 
 Epic module API (see examples/polarion_livedoc_epic_module/sample_epic.py):
   - default_traceability() -> dict  (required)
-  - test_definitions(trace) -> list[dict]  (required; Polarion testcase shape)
+  - test_definitions(trace) -> list[dict]  (required; each dict needs posneg + importance)
+  - steps: list[tuple[str, str]] — second element must use expected_sample_output() (Run + Sample output)
+  - DEFAULT_TESTCASE_METADATA (optional; defaults to CNF_METALLB_TESTCASE_METADATA_DEFAULTS
+    with caselevel/casecomponent/caseimportance/caseposneg/caseautomation REST ids)
   - DEFAULT_SPACE_ID, DEFAULT_MODULE_NAME, DEFAULT_DOCUMENT_TITLE, DEFAULT_LIVEDOC_H1_TITLE (optional)
   - REPLACE_STALE_WORK_ITEMS = (lucene_query, title_substring) or None for --replace-module-testcases
 """
@@ -37,12 +40,19 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from adapters.polarion_adapter import PolarionAdapter, read_qe_env  # noqa: E402
+from adapters.polarion_adapter import (  # noqa: E402
+    PolarionAdapter,
+    build_livedoc_portal_url,
+    read_qe_env,
+)
 from adapters.polarion_test_publish import (  # noqa: E402
+    CNF_METALLB_TESTCASE_METADATA_DEFAULTS,
     apply_traceability_cli,
     discover_work_item_ids_by_title_marker,
     merge_traceability_from_env,
-    traceability_section_html,
+    resolve_testcase_metadata,
+    TESTCASE_WORKITEM_DESCRIPTION_HTML,
+    validate_testcase_dict,
 )
 
 
@@ -206,10 +216,16 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     target_document = f"{doc_project}/{space}/{module_name}"
+    livedoc_url = build_livedoc_portal_url(base, doc_project, space, module_name)
     trace = apply_traceability_cli(
         merge_traceability_from_env(mod.default_traceability(), env), args
     )
     tests = mod.test_definitions(trace)
+    for tc in tests:
+        validate_testcase_dict(tc)
+    epic_metadata_defaults = (
+        _get(mod, "DEFAULT_TESTCASE_METADATA") or CNF_METALLB_TESTCASE_METADATA_DEFAULTS
+    )
 
     stale_cfg = _get(mod, "REPLACE_STALE_WORK_ITEMS")
     lucene_q = args.replace_lucene_query
@@ -230,6 +246,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  Epic module: {epic_name}")
         print(f"  Document project: {doc_project}")
         print(f"  Target module: {target_document}")
+        print(f"  LiveDoc URL: {livedoc_url}")
         print(f"  Traceability epic: {trace['epic_label']} -> {trace['epic_url']}")
         print(f"  High-level plan URL: {trace['high_level_plan_url']}")
         print(f"  Detailed plan URL: {trace['detailed_plan_url']}")
@@ -248,7 +265,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.skip_document_create and not args.home_page_only:
             print(f"  Skip document create; target: {target_document}")
         for t in tests:
-            print(f"  - {t['title']} ({len(t['steps'])} steps)")
+            meta = resolve_testcase_metadata(t, epic_defaults=epic_metadata_defaults)
+            print(
+                f"  - {t['title']} ({len(t['steps'])} steps) "
+                f"caseposneg={meta['caseposneg']} caseimportance={meta['caseimportance']}"
+            )
         if not args.home_page_only:
             print("  Then: PATCH LiveDoc home page.")
         return 0
@@ -268,17 +289,22 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         if args.resync_steps_and_home:
             for tc, wid in zip(tests, ids, strict=True):
-                print(f"Replacing Polarion Test Steps for {wid} …")
+                meta = resolve_testcase_metadata(tc, epic_defaults=epic_metadata_defaults)
+                print(f"Replacing Polarion Test Steps + metadata + description for {wid} …")
                 adapter.replace_test_steps(wid, tc["steps"])
+                adapter.update_testcase_metadata(wid, meta)
+                adapter.update_testcase_description(
+                    wid, tc.get("description_html", TESTCASE_WORKITEM_DESCRIPTION_HTML)
+                )
         adapter.publish_livedoc_home_page(
             space,
             module_name,
             document_h1_title=livedoc_h1,
-            traceability_html=traceability_section_html(trace),
+            trace=trace,
             tests=tests,
             work_item_ids=ids,
         )
-        print("Updated LiveDoc home page:", target_document)
+        print("Updated LiveDoc home page:", livedoc_url)
         return 0
 
     if args.replace_module_testcases:
@@ -301,18 +327,22 @@ def main(argv: list[str] | None = None) -> int:
             adapter.delete_work_items(to_del)
 
     if args.skip_document_create:
-        print("Skipping document create; using existing module:", target_document)
+        print("Skipping document create; using existing module:", livedoc_url)
     else:
         doc = adapter.create_module_document(space, module_name, title=title_doc)
         print("Created document:", doc.get("id", doc))
 
     created_ids: list[str] = []
     for tc in tests:
+        meta = resolve_testcase_metadata(tc, epic_defaults=epic_metadata_defaults)
         wid = adapter.create_testcase(
             title=tc["title"],
-            description_html=tc["description_html"],
+            description_html=tc.get(
+                "description_html", TESTCASE_WORKITEM_DESCRIPTION_HTML
+            ),
             setup_html=tc["setup_html"],
             teardown_html=tc["teardown_html"],
+            metadata=meta,
             status="draft",
         )
         adapter.add_test_steps(wid, tc["steps"])
@@ -326,13 +356,14 @@ def main(argv: list[str] | None = None) -> int:
         space,
         module_name,
         document_h1_title=livedoc_h1,
-        traceability_html=traceability_section_html(trace),
+        trace=trace,
         tests=tests,
         work_item_ids=created_ids,
     )
     print("\nUpdated LiveDoc home page with embedded descriptions and test-step tables.")
     print("\nDone.")
-    print(f"Document module: {target_document}")
+    print(f"LiveDoc URL: {livedoc_url}")
+    print(f"REST target: {target_document}")
     print(f"Test case IDs: {', '.join(created_ids)}")
     return 0
 

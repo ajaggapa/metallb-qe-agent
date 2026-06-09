@@ -26,7 +26,7 @@ The user is in **Phase 3** of the MetalLB QE lifecycle: **test case first execut
 2. **Configure CLI** — `export KUBECONFIG=...` (or use `--kubeconfig`), verify with `oc whoami` / `oc cluster-info` or `scripts/check_cluster_context.sh`.
 
 3. **Per testcase**
-   - Load **Setup**, **Steps**, **Expected results**, **Teardown** from Polarion (API/adapters if available) or from the user-pasted detailed plan.
+   - Load **Setup**, **Steps**, **Expected results**, **Teardown** from Polarion (API/adapters if available) or from the user-pasted detailed plan. Expected cells use **`Run:`** + **`Sample output:`** — compare actual command output against the sample (allow node-name / timestamp variance).
    - Execute steps in order; capture relevant command output snippets, resource states, and log references for failures.
    - Run **Teardown** when specified so the next case is not polluted.
 

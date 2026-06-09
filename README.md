@@ -1,6 +1,6 @@
 # metallb-qe-agent
 
-Cursor-oriented workflows for MetalLB / OpenShift networking QE: high-level test plans drafted in chat (Google Docs publish on request), detailed test plans (Google Docs), Polarion LiveDoc publishing, and a four-phase lifecycle with explicit approval gates.
+Cursor-oriented workflows for MetalLB / OpenShift networking QE: high-level test plans drafted in chat (Google Docs publish on request), detailed test plans (Google Docs; step **Expected** blocks use **Run + Sample output**), Polarion LiveDoc publishing (epic `steps` use `expected_sample_output()`; testcase metadata uses Polarion `case*` REST attributes — see `metallb-polarion-test-publish` skill), and a four-phase lifecycle with explicit approval gates.
 
 See [AGENTS.md](AGENTS.md) for guardrails and [`.cursor/skills/metallb-detailed-test-plan/references/metallb-qe-lifecycle.mdc`](.cursor/skills/metallb-detailed-test-plan/references/metallb-qe-lifecycle.mdc) for phase definitions.
 

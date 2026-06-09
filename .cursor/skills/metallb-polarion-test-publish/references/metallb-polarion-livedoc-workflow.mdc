@@ -1,27 +1,54 @@
 ---
-description: Polarion LiveDoc must embed testcase content on the module home page, not only work-item macros
+description: Polarion LiveDoc embeds readable testcase HTML without extra outline Heading nodes
 ---
 
 # Polarion testcase + LiveDoc (mandatory)
 
 When creating or updating **Polarion testcase work items** attached to a **LiveDoc module** (MetalLB/CNF or similar):
 
-1. **Always PATCH the module `homePageContent`** after work items exist and are moved into the document. A list of testcase macros alone is **not** sufficient—the wiki page must show **titles, Description, Setup, Test steps (Step | Expected Result table), and Teardown** in HTML on the home page.
+1. **Set testcase work-item metadata on create** — use Polarion REST attribute ids (not UI label names). Wrong ids (`level`, `component`, `importance`) are accepted by the API but **stay empty in the UI**; use `case*` fields (pattern from [OCP-86293](https://polarion.engineering.redhat.com/polarion/#/project/OSE/workitem?id=OCP-86293)):
 
-2. **Implementation (use these, do not reinvent ad hoc):**
-   - `adapters/polarion_livedoc.build_livedoc_home_html` — builds the standard HTML (tables + per-TC portal links).
+   | UI label | REST attribute | CNF/MetalLB value |
+   |----------|----------------|-------------------|
+   | Level | `caselevel` | `component` |
+   | Component | `casecomponent` | `telco` |
+   | Subcomponent | `subcomponent` | `cnfnetwork` |
+   | Sub Team | `subteam` | `kni` |
+   | Products | `products` | `ocp` |
+   | Test type | `testtype` | `functional` |
+   | Pos/Neg | `caseposneg` | `positive` / `negative` (per test) |
+   | Importance | `caseimportance` | `critical` / `high` / `medium` / `low` (per test) |
+   | Automation | `caseautomation` | `notautomated` |
+   | Upstream | `upstream` | `no` |
+
+   Also set numeric `priority` (`70.0` = High, etc.). Epic modules use human `posneg` / `importance` strings; `resolve_testcase_metadata()` in `adapters/polarion_test_publish.py` builds the REST payload. Defaults: `CNF_METALLB_TESTCASE_METADATA_DEFAULTS`.
+
+2. **Always PATCH the module `homePageContent`** after work items exist and are moved into the document. Each testcase block needs **one `module-workitem` macro** **plus** readable inline HTML: **Traceability**, **Purpose**, **Pass/fail** (once each, under the test), Setup, Test steps table, Teardown. **Leave the testcase work item Description empty** — otherwise the macro repeats Traceability/Purpose/Pass-fail. Epic dicts use `purpose` and `pass_fail` strings, not `description_html` for prose. **Test steps Expected Result:** `expected_sample_output()` — `Run:` verification command + `Sample output:` (aligned with detailed test plan `Expected:` blocks in `metallb-detailed-test-plan/assets/template.md`).
+
+3. **One outline ID per testcase only.** Create exactly **one testcase work item** per test. Do **not** create extra outline nodes from HTML headings:
+   - **Never** use `<h1>`–`<h6>` on the home page or in testcase Description HTML.
+   - Polarion turns each heading into a **Heading** document part (separate outline ID).
+   - Use **`html_section_label()`** / bold `<p>` for titles and subsections. LiveDoc home page typography: document title **16pt**; each testcase title **12pt** with **underline**. Put `font-size` / underline on the inner **`<span>`** (Polarion ignores them on `<p>` — match CNF MetalLB reference docs).
+
+4. **Implementation (use these, do not reinvent ad hoc):**
+   - `adapters.polarion_test_publish.build_testcase_metadata` / `resolve_testcase_metadata` — `case*` REST attributes.
+   - `adapters.polarion_adapter.module_workitem_macro_div` — one macro per testcase on the home page.
+   - `adapters.polarion_adapter.html_section_label` — bold `<p>` section titles (no outline nodes).
+   - `adapters.polarion_livedoc.build_livedoc_home_html` — readable HTML + macros + portal links.
+   - `adapters.polarion_test_publish.testcase_description_html` — Description field HTML (no heading tags).
    - `PolarionAdapter.publish_livedoc_home_page(...)` — builds and PATCHes in one call.
-   - Reference: `scripts/publish_polarion_livedoc_tests.py` + an importable **epic module** you maintain (copy `examples/polarion_livedoc_epic_module/sample_epic.py` as a starting point; keep customer-specific payloads out of the shared repo or gitignore them).
+   - `scripts/publish_polarion_livedoc_tests.py` + epic module (`examples/polarion_livedoc_epic_module/sample_epic.py`).
 
-3. **Polarion API constraints** (encoded in `polarion_livedoc`):
-   - Start the body with `<p id="polarion_1"></p>`.
-   - Do **not** set custom `id=` attributes on headings (PATCH may fail with "Wrong Heading Part ID format").
-   - Use **bold `<p>` labels** for subsections (Description, Setup, Test steps, Teardown), not `<h3>` (Polarion may rewrite `h3` into empty work-item macros).
+5. **LiveDoc browser URL** — use `build_livedoc_portal_url()` / `PolarionAdapter.livedoc_portal_url()`:
+   `{POLARION_BASE_URL}/polarion/#/project/{projectId}/wiki/{spaceId}/{moduleName}`.
+   Never use `#/project/.../space/.../module/...` in chat or docs; that route redirects to the portal home.
 
-4. **Bottom of page:** do **not** add a separate "Linked Polarion test cases" section or trailing `module-workitem` macros—each testcase already links to its Polarion WI from the section header. **This is enforced in code:** `build_livedoc_home_html` runs `validate_livedoc_home_html_policy` and raises `ValueError` if those patterns appear (including inside testcase HTML fields).
+6. **Polarion API constraints** (encoded in `polarion_livedoc`):
+   - Start the body with `<p id="polarion_1"></p>` only; do not add other custom `id=` attributes on arbitrary elements.
+   - **`validate_livedoc_home_html_policy`** requires exactly one `module-workitem` macro per `work_item_id`, rejects `<h1>`–`<h6>`, and rejects a trailing "Linked Polarion test cases" section.
 
-5. **Test step cells (LiveDoc table + testcase WI steps):** use `white-space:pre-wrap` with `overflow-wrap:break-word` / `word-break:break-word` inside a `<div>`, not a plain `<pre>`—tables use `width:100%;table-layout:fixed` and 50% columns so text wraps. To refresh existing Polarion items: `scripts/publish_polarion_livedoc_tests.py --epic-module <your.epic.module> --home-page-only --attach-work-items … --resync-steps-and-home`.
+7. **Test step cells (LiveDoc table + testcase WI steps):** use `white-space:pre-wrap` with `overflow-wrap:break-word` / `word-break:break-word` inside a `<div>`, not a plain `<pre>`—tables use `width:100%;table-layout:fixed` and 50% columns so text wraps. **Expected Result** must use `expected_sample_output()` — a verification `Run: oc …` line plus `Sample output:` with representative command output (not only "should be Valid" prose). Refresh existing WIs: `--home-page-only --attach-work-items … --resync-steps-and-home`.
 
-6. **Refresh body only:** `python3 scripts/publish_polarion_livedoc_tests.py --epic-module <your.epic.module> --home-page-only --attach-work-items OCP-…` (ids in testcase order). For a new epic, add a Python module (same API as `examples/polarion_livedoc_epic_module/sample_epic.py`) or call `publish_livedoc_home_page` with the same test dict shape.
+8. **Refresh body only:** `python3 scripts/publish_polarion_livedoc_tests.py --epic-module <your.epic.module> --home-page-only --attach-work-items OCP-…` (ids in testcase order).
 
-7. **CNF MetalLB area:** default LiveDoc space for CNF epics is **`CNF`** (same wiki tree as `CNF MetalLB`), unless the user specifies another `POLARION_SPACE_ID`.
+9. **CNF MetalLB area:** default LiveDoc space for CNF epics is **`CNF`** (same wiki tree as `CNF MetalLB`), unless the user specifies another `POLARION_SPACE_ID`.

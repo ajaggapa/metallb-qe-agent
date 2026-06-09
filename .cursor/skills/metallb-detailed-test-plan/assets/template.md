@@ -52,7 +52,13 @@ Run:
 oc get crd configurationstates.metallb.io -o name
 ```
 
-Expected: [What the tester should see]
+Expected:
+
+Run: oc get crd configurationstates.metallb.io -o name
+
+Sample output:
+
+customresourcedefinition.apiextensions.k8s.io/configurationstates.metallb.io
 
 #### Step 2 — [Short title]
 
@@ -75,7 +81,14 @@ oc apply -f step2-manifest.yaml
 oc describe configmap example-configmap -n metallb-system
 ```
 
-Expected: [What the tester should see]
+Expected:
+
+Run: oc get configmap example-configmap -n metallb-system
+
+Sample output:
+
+NAME                DATA   AGE
+example-configmap   1      12s
 
 Cleanup (optional):
 
@@ -105,6 +118,14 @@ oc get nodes
 
 Expected:
 
+Run: oc get nodes
+
+Sample output:
+
+NAME       STATUS   ROLES           AGE   VERSION
+worker0    Ready    worker          5d    v1.33.0
+worker1    Ready    worker          5d    v1.33.0
+
 ### TC-03: [Name]
 
 **Purpose:**
@@ -126,6 +147,13 @@ oc version --client
 ```
 
 Expected:
+
+Run: oc version --client
+
+Sample output:
+
+Client Version: 4.22.0
+Kustomize Version: v5.6.0
 
 ## References
 

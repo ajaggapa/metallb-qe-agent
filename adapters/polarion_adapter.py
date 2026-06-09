@@ -52,6 +52,38 @@ def read_qe_env(env_file: Path) -> dict[str, str]:
     return values
 
 
+def build_livedoc_portal_url(
+    base_url: str,
+    project_id: str,
+    space_id: str,
+    module_name: str,
+) -> str:
+    """
+    Browser URL for a Polarion LiveDoc module home page.
+
+    Red Hat Polarion SPA routing uses ``#/project/{projectId}/wiki/{spaceId}/{moduleName}``.
+    Do **not** use ``#/project/.../space/.../module/...`` — that path redirects to the portal home.
+    """
+    base = base_url.rstrip("/")
+    return f"{base}/polarion/#/project/{project_id}/wiki/{space_id}/{module_name}"
+
+
+def build_livedoc_portal_url_from_target(
+    base_url: str,
+    target_document: str,
+) -> str:
+    """
+    Build a LiveDoc portal URL from REST ``target_document`` ``{projectId}/{spaceId}/{moduleName}``.
+    """
+    parts = target_document.split("/", 2)
+    if len(parts) != 3:
+        raise ValueError(
+            f"target_document must be project/space/module, got {target_document!r}"
+        )
+    project_id, space_id, module_name = parts
+    return build_livedoc_portal_url(base_url, project_id, space_id, module_name)
+
+
 def polarion_html_field(inner_html: str) -> dict[str, Any]:
     """Polarion rich-text field payload (HTML)."""
     return {"type": "text/html", "value": inner_html}
@@ -59,6 +91,53 @@ def polarion_html_field(inner_html: str) -> dict[str, Any]:
 
 def html_paragraph(text: str) -> str:
     return f"<p>{html.escape(text)}</p>"
+
+
+def module_workitem_macro_div(work_item_id: str) -> str:
+    """
+    Polarion LiveDoc wiki macro that **marks** a testcase work item in the document.
+
+    Without one macro per testcase, PATCHing custom home-page HTML can leave work items
+    "unmarked" (portal links alone are not enough). Use exactly one per test — no headings.
+    """
+    wid = html.escape(work_item_id, quote=True)
+    return (
+        f'<div id="polarion_wiki macro name=module-workitem;params=id={wid}"></div>'
+    )
+
+
+def html_section_label(
+    text: str,
+    *,
+    margin_top: str = "1em",
+    margin_bottom: str = "0.4em",
+    font_size: str | None = None,
+    text_decoration: str | None = None,
+    bold: bool = True,
+) -> str:
+    """
+    Bold section label as a ``<p>`` — not ``<h1>``–``<h6>``.
+
+    Polarion turns HTML headings into LiveDoc outline Heading parts (extra IDs/nodes).
+    Use this for document titles, testcase titles, and subsections on the home page and
+    in testcase Description fields.
+
+    Typography (``font-size``, underline) must live on an inner ``<span>`` — Polarion's
+    wiki renderer ignores ``font-size`` on ``<p>`` (see CNF MetalLB reference LiveDocs).
+    """
+    p_style = f"margin-top:{margin_top};margin-bottom:{margin_bottom};"
+    span_parts = ["line-height:1.5"]
+    if bold:
+        span_parts.append("font-weight:bold")
+    if font_size:
+        span_parts.append(f"font-size:{font_size}")
+    if text_decoration:
+        span_parts.append(f"text-decoration:{text_decoration}")
+    span_style = ";".join(span_parts) + ";"
+    return (
+        f'<p style="{p_style}">'
+        f'<span style="{span_style}">{html.escape(text)}</span></p>'
+    )
 
 
 def html_block(text: str) -> str:
@@ -168,13 +247,28 @@ class PolarionAdapter:
             home_page_content_type="text/html",
         )
 
+    def update_testcase_description(
+        self,
+        work_item_id: str,
+        description_html: str,
+    ) -> None:
+        """PATCH testcase Description (HTML)."""
+        from polarion_rest_client.workitem import WorkItem
+
+        WorkItem(self.client).update(
+            self.project_id,
+            work_item_id,
+            description=description_html,
+            description_type="text/html",
+        )
+
     def publish_livedoc_home_page(
         self,
         space_id: str,
         document_name: str,
         *,
         document_h1_title: str,
-        traceability_html: str,
+        trace: dict[str, str],
         tests: list[dict[str, Any]],
         work_item_ids: Sequence[str],
     ) -> dict:
@@ -182,20 +276,26 @@ class PolarionAdapter:
         Build standard testcase-collection HTML (via `polarion_livedoc`) and PATCH the LiveDoc home page.
         Mandatory whenever testcase work items are attached to a module — see project rules.
 
-        The HTML builder rejects a trailing "Linked Polarion test cases" section and
-        ``module-workitem`` macros (`validate_livedoc_home_html_policy`).
+        The HTML builder requires one ``module-workitem`` macro per testcase (marks WIs in
+        the document) and rejects heading tags / a "Linked Polarion test cases" footer.
         """
         from .polarion_livedoc import build_livedoc_home_html
 
         body = build_livedoc_home_html(
             document_h1_title=document_h1_title,
-            traceability_html=traceability_html,
+            trace=trace,
             tests=tests,
             project_id=self.project_id,
             base_url=self.base_url,
             work_item_ids=work_item_ids,
         )
         return self.update_document_home_page(space_id, document_name, html_body=body)
+
+    def livedoc_portal_url(self, space_id: str, module_name: str) -> str:
+        """Browser URL for this project's LiveDoc module (wiki home page)."""
+        return build_livedoc_portal_url(
+            self.base_url, self.project_id, space_id, module_name
+        )
 
     def create_module_document(
         self,
@@ -226,10 +326,18 @@ class PolarionAdapter:
         description_html: str,
         setup_html: str,
         teardown_html: str,
+        metadata: dict[str, Any] | None = None,
         status: str = "draft",
     ) -> str:
         """
-        Create a testcase work item and set Description, Setup, Teardown (HTML).
+        Create a testcase work item and set Description, Setup, Teardown (HTML),
+        and Polarion classification metadata.
+
+        ``metadata`` must use Polarion REST attribute ids (see
+        ``polarion_test_publish.build_testcase_metadata``): UI fields Level,
+        Component, Importance, Pos/Neg, and Automation map to ``caselevel``,
+        ``casecomponent``, ``caseimportance``, ``caseposneg``, and
+        ``caseautomation`` — not ``level`` / ``component`` / ``importance``.
         Returns the short work item id (e.g. OCP-12345).
         """
         from polarion_rest_client.workitem import WorkItem
@@ -245,17 +353,35 @@ class PolarionAdapter:
         if not wid:
             raise RuntimeError(f"Unexpected create response: {created!r}")
 
+        attrs: dict[str, Any] = {
+            "setup": polarion_html_field(setup_html),
+            "teardown": polarion_html_field(teardown_html),
+        }
+        if metadata:
+            attrs.update(metadata)
+
         wi.update(
             self.project_id,
             wid,
             description=description_html,
             description_type="text/html",
-            attributes={
-                "setup": polarion_html_field(setup_html),
-                "teardown": polarion_html_field(teardown_html),
-            },
+            attributes=attrs,
         )
         return wid
+
+    def update_testcase_metadata(
+        self,
+        work_item_id: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        """PATCH testcase classification fields (``caselevel``, ``casecomponent``, etc.)."""
+        from polarion_rest_client.workitem import WorkItem
+
+        WorkItem(self.client).update(
+            self.project_id,
+            work_item_id,
+            attributes=metadata,
+        )
 
     def add_test_steps(
         self,

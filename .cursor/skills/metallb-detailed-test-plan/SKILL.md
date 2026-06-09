@@ -53,7 +53,19 @@ Turn each high-level test case into **operator-ready manual steps**: concrete Ku
    - Every step that applies or changes cluster state should include:
      - `Manifest (YAML):` (plain label, not bold) followed by a fenced `yaml` block the tester can save and apply.
      - `Run:` (plain label) followed by a fenced `bash` block using `oc` or `kubectl` (apply, get, describe, logs, wait, delete, debug).
-   - Pure verification steps may omit YAML and use command-only blocks; still include an `Expected:` line (plain label, not bold).
+   - Pure verification steps may omit YAML and use command-only blocks; still include an `Expected:` block (plain label, not bold).
+   - **`Expected:` must show sample command output**, not only prose (for example do **not** write only "pod should be created" or "status is Valid"). After apply/create steps, give a **verification** `oc`/`kubectl` command the tester runs plus **representative terminal output** captured from cluster validation (or realistic example output). Format:
+
+     ```
+     Expected:
+
+     Run: oc get <resource> <name> -n metallb-system
+
+     Sample output:
+     <paste representative table, single line, or jsonpath result>
+     ```
+
+     If the **Step** `Run:` block already ends with the verification command, the `Expected:` block may repeat that command under `Run:` then show `Sample output:` — clarity for testers and for later Polarion publish matters more than avoiding duplication.
    - Add **Cleanup** steps where resources must be removed to avoid cross-case interference.
 
 5. **Namespace, literals, and Google Docs–friendly formatting (mandatory for detailed plans)**
@@ -88,6 +100,7 @@ Turn each high-level test case into **operator-ready manual steps**: concrete Ku
 - YAML must be syntactically valid and use CRD `apiVersion`/`kind`/`metadata` consistent with analyzed repos.
 - Commands must be copy-pasteable; prefer `oc` for OpenShift with a one-line note that `kubectl` works where equivalent.
 - Each test case must remain traceable to high-level **Purpose** / **Pass-Fail** intent.
+- Every step **Expected:** block includes **`Run:`** (verification command) and **`Sample output:`** with realistic terminal output — same contract as Polarion `expected_sample_output()` in `metallb-polarion-test-publish`.
 - Never include credentials or values from `.env`.
 - No persistent test-plan markdown under tracked repo paths (use stdin → `.cursor/workspaces/agent-tmp/` → publish script).
 
