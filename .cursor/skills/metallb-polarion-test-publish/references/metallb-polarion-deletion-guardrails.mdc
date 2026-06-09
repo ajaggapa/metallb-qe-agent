@@ -1,0 +1,70 @@
+---
+description: Mandatory double user confirmation before deleting Polarion LiveDocs or work items
+---
+
+# Polarion deletion guardrails (mandatory)
+
+**Never** delete a LiveDoc module or testcase work items without **two separate** explicit user approvals in chat.
+
+## Agent workflow
+
+### Step A — Build and show the plan (no delete)
+
+1. Run a **plan-only** command (default — no `--confirm-token` / `--confirm-final`):
+   - LiveDoc: `python3 scripts/delete_polarion_livedoc_module.py --space-id <space> --module-name <module>`
+   - Work items: `python3 scripts/delete_polarion_work_items.py --work-items OCP-…,OCP-…`
+2. Or call `build_livedoc_deletion_plan()` / `build_work_items_deletion_plan()` and paste `format_*_deletion_plan_markdown()` into chat.
+3. The plan must list:
+   - **REST target** (`project/space/module`) for LiveDocs
+   - **LiveDoc wiki URL** that will stop working
+   - Each **testcase work item** id, title, and **portal URL** that will stop working
+   - The **confirm token** the user must quote on final approval
+
+### Step B — First user confirmation
+
+Ask explicitly, for example:
+
+> Here is what will be deleted and which links will break. Do you want to proceed to **final** confirmation? Reply **yes** to continue.
+
+**Stop** if the user declines or is unclear.
+
+### Step C — Second user confirmation (same plan again)
+
+Show the **same** plan and invalid links again. Ask for **final** approval with the exact token, for example:
+
+> Final confirmation: reply with the token `DELETE-LIVEDOC:OSE/CNF/…` (or `DELETE-WORK-ITEMS:OCP-…,…`) to authorize deletion.
+
+**Stop** unless the user sends that token (or clearly equivalent explicit authorization you map to the token).
+
+### Step D — Execute delete
+
+Only after Step B **and** Step C:
+
+```bash
+python3 scripts/delete_polarion_livedoc_module.py \
+  --space-id CNF --module-name <module> \
+  --confirm-token 'DELETE-LIVEDOC:OSE/CNF/<module>' \
+  --confirm-final 'DELETE-LIVEDOC:OSE/CNF/<module>'
+```
+
+```bash
+python3 scripts/delete_polarion_work_items.py \
+  --work-items OCP-89305,OCP-89306 \
+  --confirm-token 'DELETE-WORK-ITEMS:OCP-89305,OCP-89306' \
+  --confirm-final 'DELETE-WORK-ITEMS:OCP-89305,OCP-89306'
+```
+
+Or `PolarionAdapter.delete_livedoc_module(..., confirmed=True)` only after the same double chat approval.
+
+## Hard rules
+
+- **Do not** call `delete_livedoc_module` without `confirmed=True`.
+- **Do not** call `delete_work_items` for user-requested cleanup without the dual-confirmation script flow above.
+- **Exception:** `publish_polarion_livedoc_tests.py --replace-module-testcases` may delete **stale** WIs matching a documented epic query as part of republish — that is not ad-hoc user deletion.
+- **Do not** skip the second confirmation because the user said "delete it" once — always two turns.
+
+## Implementation
+
+- `adapters/polarion_deletion.py` — plans, markdown formatting, `require_dual_confirmation()`
+- `scripts/delete_polarion_livedoc_module.py` — plan-only by default
+- `scripts/delete_polarion_work_items.py` — plan-only by default

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import html
 import os
+import re
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -66,6 +67,42 @@ def build_livedoc_portal_url(
     """
     base = base_url.rstrip("/")
     return f"{base}/polarion/#/project/{project_id}/wiki/{space_id}/{module_name}"
+
+
+def livedoc_module_location(space_id: str, module_name: str) -> str:
+    """Polarion module location for SOAP ``getModuleByLocation`` (``{space}/{moduleName}``)."""
+    return f"{space_id}/{module_name}"
+
+
+def _soap_login_session_id(*, base_url: str, token: str, http_client: Any) -> str:
+    session_url = f"{base_url.rstrip('/')}/polarion/ws/services/SessionWebService"
+    body = f"""<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ses="http://ws.polarion.com/SessionWebService">
+  <soapenv:Body><ses:logInWithToken><ses:mechanism>AccessToken</ses:mechanism><ses:username></ses:username><ses:token>{html.escape(token)}</ses:token></ses:logInWithToken></soapenv:Body>
+</soapenv:Envelope>"""
+    resp = http_client.post(
+        session_url,
+        content=body.encode(),
+        headers={"Content-Type": "text/xml; charset=utf-8", "SOAPAction": "logInWithToken"},
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"Polarion SOAP login failed (HTTP {resp.status_code})")
+    match = re.search(r"<ns1:sessionID[^>]*>([^<]+)</ns1:sessionID>", resp.text)
+    if not match:
+        raise RuntimeError("Polarion SOAP login response missing sessionID")
+    return match.group(1)
+
+
+def _soap_tracker_call(*, base_url: str, session_id: str, body: str, action: str, http_client: Any) -> str:
+    tracker_url = f"{base_url.rstrip('/')}/polarion/ws/services/TrackerWebService"
+    resp = http_client.post(
+        tracker_url,
+        content=body.encode(),
+        headers={"Content-Type": "text/xml; charset=utf-8", "SOAPAction": action},
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"Polarion SOAP {action} failed (HTTP {resp.status_code})")
+    return resp.text
 
 
 def build_livedoc_portal_url_from_target(
@@ -296,6 +333,80 @@ class PolarionAdapter:
         return build_livedoc_portal_url(
             self.base_url, self.project_id, space_id, module_name
         )
+
+    def delete_livedoc_module(
+        self,
+        space_id: str,
+        module_name: str,
+        *,
+        project_id: str | None = None,
+        confirmed: bool = False,
+    ) -> None:
+        """
+        Delete a LiveDoc module (document).
+
+        Polarion REST returns HTTP 405 for document DELETE. Deletion uses SOAP
+        ``TrackerWebService.getModuleByLocation`` + ``deleteModule`` with the same
+        ``POLARION_TOKEN`` as REST (``SessionWebService.logInWithToken``).
+
+        Pass ``confirmed=True`` only after the user has approved deletion **twice** in chat
+        (see ``adapters.polarion_deletion`` and ``metallb-polarion-deletion-guardrails``).
+        """
+        if not confirmed:
+            raise ValueError(
+                "Refusing to delete LiveDoc without confirmed=True. Build a deletion plan "
+                "(build_livedoc_deletion_plan), show invalid links to the user, obtain double "
+                "explicit confirmation in chat, then call delete scripts with matching "
+                "--confirm-token and --confirm-final."
+            )
+        proj = project_id or self.project_id
+        http_client = self.client.gen.get_httpx_client()
+        session_id = _soap_login_session_id(
+            base_url=self.base_url, token=self.token, http_client=http_client
+        )
+        location = livedoc_module_location(space_id, module_name)
+        get_body = f"""<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tra="http://ws.polarion.com/TrackerWebService">
+  <soapenv:Header><ns1:sessionID xmlns:ns1="http://ws.polarion.com/session">{session_id}</ns1:sessionID></soapenv:Header>
+  <soapenv:Body><tra:getModuleByLocation><tra:projectId>{html.escape(proj)}</tra:projectId><tra:location>{html.escape(location)}</tra:location></tra:getModuleByLocation></soapenv:Body>
+</soapenv:Envelope>"""
+        get_xml = _soap_tracker_call(
+            base_url=self.base_url,
+            session_id=session_id,
+            body=get_body,
+            action="getModuleByLocation",
+            http_client=http_client,
+        )
+        if "Fault" in get_xml:
+            fault = re.search(r"<faultstring>([^<]+)</faultstring>", get_xml)
+            raise RuntimeError(
+                f"Polarion getModuleByLocation failed for {proj}/{location}: "
+                f"{fault.group(1) if fault else get_xml[:300]}"
+            )
+        uri_match = re.search(r'uri="([^"]+)"', get_xml)
+        if not uri_match:
+            raise RuntimeError(
+                f"Polarion getModuleByLocation returned no module URI for {proj}/{location}"
+            )
+        module_uri = uri_match.group(1)
+        delete_body = f"""<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tra="http://ws.polarion.com/TrackerWebService">
+  <soapenv:Header><ns1:sessionID xmlns:ns1="http://ws.polarion.com/session">{session_id}</ns1:sessionID></soapenv:Header>
+  <soapenv:Body><tra:deleteModule><tra:moduleURI>{html.escape(module_uri)}</tra:moduleURI></tra:deleteModule></soapenv:Body>
+</soapenv:Envelope>"""
+        delete_xml = _soap_tracker_call(
+            base_url=self.base_url,
+            session_id=session_id,
+            body=delete_body,
+            action="deleteModule",
+            http_client=http_client,
+        )
+        if "deleteModuleResponse" not in delete_xml:
+            fault = re.search(r"<faultstring>([^<]+)</faultstring>", delete_xml)
+            raise RuntimeError(
+                f"Polarion deleteModule failed for {module_uri}: "
+                f"{fault.group(1) if fault else delete_xml[:300]}"
+            )
 
     def create_module_document(
         self,

@@ -7,6 +7,7 @@ import unittest
 from adapters.polarion_adapter import (
     build_livedoc_portal_url,
     build_livedoc_portal_url_from_target,
+    livedoc_module_location,
 )
 
 
@@ -33,6 +34,13 @@ class TestPolarionPortalUrls(unittest.TestCase):
         self.assertEqual(
             url,
             "https://example.com/polarion/#/project/OSE/wiki/CNF/CNF_20333_MetalLB_ConfigurationState",
+        )
+
+
+    def test_module_location(self) -> None:
+        self.assertEqual(
+            livedoc_module_location("CNF", "CNF_20333_MetalLB_ConfigurationState"),
+            "CNF/CNF_20333_MetalLB_ConfigurationState",
         )
 
 

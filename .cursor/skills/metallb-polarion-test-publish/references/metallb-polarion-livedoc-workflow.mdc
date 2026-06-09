@@ -52,3 +52,5 @@ When creating or updating **Polarion testcase work items** attached to a **LiveD
 8. **Refresh body only:** `python3 scripts/publish_polarion_livedoc_tests.py --epic-module <your.epic.module> --home-page-only --attach-work-items OCP-…` (ids in testcase order).
 
 9. **CNF MetalLB area:** default LiveDoc space for CNF epics is **`CNF`** (same wiki tree as `CNF MetalLB`), unless the user specifies another `POLARION_SPACE_ID`.
+
+10. **Delete a LiveDoc or work items:** Follow **`metallb-polarion-deletion-guardrails.mdc`** — **two separate** user confirmations in chat; show deletion plan (invalid LiveDoc URL + work item portal links); default scripts are **plan-only**; execute only with matching `--confirm-token` and `--confirm-final`. REST document DELETE returns 405; LiveDoc removal uses SOAP `TrackerWebService.deleteModule`.

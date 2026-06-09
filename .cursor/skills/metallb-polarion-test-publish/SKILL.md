@@ -62,8 +62,13 @@ Optional per-test overrides: `metadata` dict on the testcase entry. Epic-level o
 | `adapters/polarion_test_publish.build_testcase_metadata` / `resolve_testcase_metadata` | Merge hardcoded + per-test Pos/Neg and Importance |
 | `adapters.polarion_adapter.build_livedoc_portal_url` | Browser LiveDoc URL: `#/project/{project}/wiki/{space}/{module}` (not `/space/.../module/...`) |
 | `PolarionAdapter.livedoc_portal_url` | Same URL for the adapter's project id |
+| `adapters.polarion_deletion.build_livedoc_deletion_plan` / `format_livedoc_deletion_plan_markdown` | Deletion plan + invalid links for user review |
+| `adapters.polarion_deletion.build_work_items_deletion_plan` / `format_work_items_deletion_plan_markdown` | Work item deletion plan |
+| `PolarionAdapter.delete_livedoc_module(..., confirmed=True)` | Delete LiveDoc via SOAP — only after double user confirmation |
 | `PolarionAdapter.create_testcase`, `update_testcase_metadata`, `add_test_steps`, `move_workitem_to_document`, `create_module_document` | Create flow |
 | `scripts/publish_polarion_livedoc_tests.py` | Generic publisher (`--epic-module <import.path>`; set `PYTHONPATH` if the module lives outside the repo root) |
+| `scripts/delete_polarion_livedoc_module.py` | Plan-only by default; dual `--confirm-token` + `--confirm-final` to delete |
+| `scripts/delete_polarion_work_items.py` | Plan-only by default; dual confirm to delete testcase WIs |
 | `examples/polarion_livedoc_epic_module/sample_epic.py` | Neutral template: `default_traceability()`, `test_definitions()`, optional `REPLACE_STALE_WORK_ITEMS` |
 
 Each testcase dict must include: `title`, **`purpose`**, **`pass_fail`**, `setup_html`, `teardown_html`, `steps` as `list[tuple[str, str]]`, plus **`posneg`** and **`importance`**. Do **not** put Purpose/Pass-fail on the work item Description (empty WI Description avoids LiveDoc macro duplication).
@@ -87,6 +92,28 @@ After publish, share the **wiki** route from `build_livedoc_portal_url(base, pro
 `https://polarion.engineering.redhat.com/polarion/#/project/OSE/wiki/CNF/CNF_20333_MetalLB_ConfigurationState`
 
 Do **not** link `#/project/.../space/.../module/...` — that SPA path redirects to the Polarion home page. REST `target_document` (`OSE/CNF/module_name`) is for APIs only, not browser navigation.
+
+## Delete a LiveDoc or work items (mandatory guardrails)
+
+Read **`references/metallb-polarion-deletion-guardrails.mdc`** before any delete.
+
+**Never** delete without **two separate** user confirmations in chat:
+
+1. Show the deletion plan (invalid LiveDoc URL + each work item link that will break).
+2. Ask whether to proceed to **final** confirmation.
+3. Show the **same** plan again; user must approve with the plan **confirm token**.
+4. Only then run delete with matching `--confirm-token` and `--confirm-final`.
+
+**Plan only (default):**
+
+```bash
+python3 scripts/delete_polarion_livedoc_module.py --space-id CNF --module-name <module>
+python3 scripts/delete_polarion_work_items.py --work-items OCP-89305,OCP-89306
+```
+
+**Execute (after double user approval):** pass the token from the plan to both `--confirm-token` and `--confirm-final`.
+
+Polarion REST has no document DELETE (405); LiveDoc removal uses SOAP `TrackerWebService.deleteModule`. `PolarionAdapter.delete_livedoc_module(..., confirmed=True)` requires the same double-confirmation policy.
 
 ## Refresh home page only
 

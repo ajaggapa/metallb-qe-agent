@@ -13,3 +13,4 @@ Each MetalLB QE skill is self-contained with these directories so operational ru
 
 - **Detailed test plan steps** (`metallb-detailed-test-plan`): each `Expected:` block uses **`Run:`** + **`Sample output:`** with representative `oc`/`kubectl` terminal output — see `assets/template.md`.
 - **Polarion publish** (`metallb-polarion-test-publish`): epic `steps` expected cells use **`expected_sample_output()`** with the same Run + Sample output shape; see `examples/polarion_livedoc_epic_module/sample_epic.py`.
+- **Polarion delete** (`metallb-polarion-deletion-guardrails.mdc`): **two** user confirmations in chat; plan lists broken links; scripts delete only with dual `--confirm-token` / `--confirm-final`.
